@@ -1,10 +1,9 @@
 <?php
+include 'Document.php';
 class Crawler
 {
-    protected $_url;
+    protected $_iResourceLink;
     protected $_depth;
-    protected $_host;
-    protected $_useHttpAuth = false;
     protected $_seen = array();
     protected $_filter = array();
     protected $_cssClassName;
@@ -18,14 +17,14 @@ class Crawler
     //      - a classe CSS que o crawler deve procurar
     //  Cria um objeto Crawler e instancia o atributo $_host com o domínio do site (url).
     // **
-    public function __construct($url, $depth = 5, $cssClassName = "code-list-item")
+    public function __construct($resourceLink, $depth = 5, $cssClassName = "code-list-item")
     {
-        $this->_url = $url;
+        $this->_iResourceLink = $resourceLink;
         $this->_depth = $depth;
-        $parse = parse_url($url);
-        $this->_host = $parse['host'];
         $this->_cssClassName = $cssClassName;
     }
+
+
 
     protected function makeAbsoluteHref($url, $href){
         // making absolute href 
@@ -52,17 +51,17 @@ class Crawler
 
     //**
     // Esta função que deveria encontrar todos links dos repositórios, mas 
-    protected function processAnchors($content, $url, $depth)
+    protected function processAnchors($document, $depth)
     {
-        $dom = new DOMDocument('1.0');
-        @$dom->loadHTML($content);
-        $anchors = $dom->getElementsByTagName('a');
+        
+        $url = $document->getResourceLink()->getUrl();
+        $anchors = $document->getDOM()->getElementsByTagName('a');
 
         //------ Testes
         //
         //O título da página com os resultados da query deveria ser: "Search · targetsdkversion"
         
-        $pageTitle = $dom->getElementsByTagName('title');
+        /*$pageTitle = $dom->getElementsByTagName('title');
        
        
         foreach ($pageTitle as $pt) {
@@ -75,59 +74,22 @@ class Crawler
             print_r("<br>------<br>");
             echo "There is no title hear...URL: " . $url . " | anchors: " . $anchors->length;
             print_r("<br>------<br>");
-        }
+        }*/
 
         //----------------
 
         foreach ($anchors as $element) {
             $href = $this->makeAbsoluteHref($url, $element->getAttribute('href'));
+            //print_r($element->getAttribute('href'));
+            //print_r($document->getContent());
+            //exit();
             
             // Crawl only link that belongs to the start domain
             $this->crawlPage($href, $depth - 1);
         }
     }
 
-    protected function getElementByClassName($dom, $cssClassName){
-        $xpath = new \DOMXpath($dom);
-        $nodes = $xpath->query('//div[@class="'.$cssClassName.'"]');    
-        return $nodes;
-    }
-
-    //**
-    //parameters: $url
-    //out: array with three informations: 
-    //  $response = html or xml or whatever...
-    //  $httpCode = the code of response
-    //  $time = response total time
-    //**
-    protected function getContent($url)
-    {
-        $handle = curl_init($url);
-        curl_setopt($handle, CURLOPT_RETURNTRANSFER, TRUE);
-
-        /* Get the HTML or whatever is linked in $url. */
-        $response = curl_exec($handle);
-        // response total time
-        $time = curl_getinfo($handle, CURLINFO_TOTAL_TIME);
-        /* Check for 404 (file not found). */
-        $httpCode = curl_getinfo($handle, CURLINFO_HTTP_CODE);
-
-        curl_close($handle);
-        return array($response, $httpCode, $time);
-    }
-
-    //**
-    //Print the results of crawling
-    //**
-    protected function printResult($url, $depth, $httpcode, $time)
-    {
-        ob_end_flush();
-        $currentDepth = $this->_depth - $depth;
-        $count = count($this->_seen);
-        echo "N::$count,CODE::$httpcode,TIME::$time,DEPTH::$currentDepth URL::$url <br>";
-        ob_start();
-        flush();
-    }
+    
 
     //**
     //Return false if:
@@ -138,7 +100,7 @@ class Crawler
     //  **
     protected function isValid($url, $depth)
     {
-        if (strpos($url, $this->_host) === false
+        if (strpos($url, $this->_iResourceLink->getHost()) === false
             || $depth === 0
             || isset($this->_seen[$url])
         ) {
@@ -154,33 +116,49 @@ class Crawler
 
 
     //**
-    // crawling the page
+    // crawling engine
     //**
-    public function crawlPage($url, $depth)
+    public function crawlPage($link, $depth)
     {
+
+        $url = $link->getUrl();
+
         if (!$this->isValid($url, $depth)) {
             return;
         }
+        
         // add to the seen URL
         $this->_seen[$url] = true;
-        // get Content and Return Code
-        list($content, $httpcode, $time) = $this->getContent($url);
         
-        // print Result for current Page: <------ TO DO
-        //$this->printResult($url, $depth, $httpcode, $time);
+        // get Content and Return Code
+        $document = new Document($link);
+
+        // print Result for current Page:
+       
+        // TO DO:
+        $document->printResult();
+        //$currentDepth = $this->_depth - $depth;
+        //$this->printDepth();
         
         // process subPages
-        $this->processAnchors($content, $url, $depth);
+        $this->processAnchors($document, $depth);
     }
 
+    //**
+    // This is a bleck list of url's...
+    // **
     public function addFilterPath($path)
     {
         $this->_filter = explode(";", $path);
     }
 
+
+    //**
+    // run the crawler
+    //** 
     public function run()
     {
-        $this->crawlPage($this->_url, $this->_depth);
+        $this->crawlPage($this->_iResourceLink, $this->_depth);
     }
 }
 ?>
